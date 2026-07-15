@@ -38,7 +38,7 @@
           <template v-if="cur.region===''">
             <div class="kicker">계정 없이 · 알고리즘 없이 · 그냥 지도로</div>
             <h1>동네 이야기는 피드가 아니라 <em>지도</em>에 있어야 합니다.</h1>
-            <p>가볼 곳·축제·맛집 정보가 SNS 계정과 알고리즘 안에 갇혀 있어요. 마실은 <b>로그인도, 팔로우도 필요 없이</b> 전국 정보를 지도와 달력으로 펼쳐 봅니다.</p>
+            <p>가볼 곳·축제·맛집 정보가 SNS 계정과 알고리즘 안에 갇혀 있어요. 마실은 <b>로그인도, 팔로우도 필요 없이</b> 서울 곳곳의 정보를 지도와 달력으로 펼쳐 봅니다.</p>
             <div class="cta">
               <button class="btn btn-p" @click="heroMap('')">🗺️ 지도로 둘러보기</button>
               <button class="btn btn-g" @click="heroCal('')">📅 축제 일정 보기</button>
@@ -67,14 +67,14 @@
     </div>
     <div class="stat-row">
       <div class="stat"><div class="n">{{ STATS.total.toLocaleString() }}</div><div class="l">등록된 장소</div></div>
-      <div class="stat"><div class="n">{{ REG_NAME.length }}</div><div class="l">개 권역</div></div>
+      <div class="stat"><div class="n">{{ REG_NAME.length }}</div><div class="l">개 생활권</div></div>
       <div class="stat"><div class="n">{{ CAT_NAME.length }}</div><div class="l">개 카테고리</div></div>
       <div class="stat"><div class="n">0</div><div class="l">필요한 로그인</div></div>
     </div>
     <div class="panels">
-      <div class="panel"><h3>카테고리별 장소 <span class="s">{{ donutRegion===''?'전국 합계':REG_NAME[donutRegion]+' 기준' }}</span></h3>
+      <div class="panel"><h3>카테고리별 장소 <span class="s">{{ donutRegion===''?'서울 전체':REG_NAME[donutRegion]+' 기준' }}</span></h3>
         <div class="dtabs">
-          <button :class="{on:donutRegion===''}" @click="donutRegion=''">전국 합계</button>
+          <button :class="{on:donutRegion===''}" @click="donutRegion=''">서울 전체</button>
           <button v-for="(r,i) in REG_NAME" :key="i" :class="{on:donutRegion===i}" @click="donutRegion=i">{{ r }}</button>
         </div>
         <div class="donut">
@@ -114,7 +114,7 @@
     </div>
     <div class="navcards">
       <button class="navcard" @click="go('map')"><div class="ico" style="background:var(--brand-soft);color:var(--brand-ink)">🗺️</div>
-        <h3>지도</h3><p>전국 {{ STATS.total.toLocaleString() }}곳을 카테고리별 색으로 한눈에. 지역·종류로 걸러 찾아보세요.</p></button>
+        <h3>지도</h3><p>서울 {{ STATS.total.toLocaleString() }}곳을 카테고리별 색으로 한눈에. 권역·종류로 걸러 찾아보세요.</p></button>
       <button class="navcard" @click="go('cal')"><div class="ico" style="background:#FDECEF;color:#c93a63">📅</div>
         <h3>캘린더</h3><p>날짜가 있는 축제·행사를 달력에 펼쳐서. 이번 주말 뭐가 열리는지 바로.</p></button>
       <button class="navcard" @click="go('comm')"><div class="ico" style="background:#E9F7F0;color:#0c7d55">💬</div>
@@ -127,7 +127,7 @@
     <div class="view-head"><h2>지도에서 찾기</h2><span class="sub">점을 누르면 상세 정보가 열려요</span></div>
     <div class="toolbar">
       <select class="reg" v-model="selRegion">
-        <option value="">전체 지역</option>
+        <option value="">전체 권역</option>
         <option v-for="(r,i) in REG_NAME" :key="i" :value="i">{{ r }}</option>
       </select>
       <input class="search" v-model="q" placeholder="이름으로 검색…">
@@ -185,7 +185,7 @@
       </div>
     </div></div>
     <div class="cal-note">
-      <span v-if="calRegion===''">축제·행사 {{ FESTS.length }}건 (전국, TourAPI 수집). 색은 지역 기준.</span>
+      <span v-if="calRegion===''">축제·행사 {{ FESTS.length }}건 (서울, TourAPI 수집). 색은 권역 기준.</span>
       <span v-else>{{ REG_NAME[calRegion] }} {{ calFests.length }}건만 표시 중 · 전체를 보려면 위 「전체」를 누르세요.</span>
     </div>
     <div class="cal-legend"><span class="lg" v-for="(r,i) in REG_NAME" :key="i"><span class="dot" :style="{background:REGION_COLOR[i]}"></span>{{ r }}</span></div>
@@ -446,7 +446,7 @@ export default {
     // 지도
     ensureMap(){
       if(this.mapReady) return; this.mapReady=true;
-      this.map=L.map('map',{preferCanvas:true,scrollWheelZoom:true}).setView([36.5,127.8],7);
+      this.map=L.map('map',{preferCanvas:true,scrollWheelZoom:true}).setView([37.5665,126.978],11);
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
         {attribution:'© OpenStreetMap © CARTO',maxZoom:19,subdomains:'abcd'}).addTo(this.map);
       this.markerLayer=L.layerGroup().addTo(this.map); this.renderMap();
@@ -461,7 +461,7 @@ export default {
     },
     zoomToRegion(){
       if(!this.mapReady) return;
-      if(this.selRegion===''||this.selRegion===null){ this.map.setView([36.5,127.8],7,{animate:true}); return; }
+      if(this.selRegion===''||this.selRegion===null){ this.map.setView([37.5665,126.978],11,{animate:true}); return; }
       const b=REGBOUNDS[this.selRegion];
       if(b) this.map.fitBounds(b,{padding:[36,36],maxZoom:13,animate:true});
     },

@@ -1,7 +1,7 @@
-import { DATA, STATS } from './data/masil-data.js'
+import { DATA as BASE_DATA, STATS as BASE_STATS } from './data/masil-data.js'
 
 const CAT_COLOR=['#2a78d6','#1baf7a','#eda100','#008300','#4a3aa7','#e34948','#e87ba4','#eb6834'];
-const REGION_COLOR=['#2f6fd0','#0c7d55','#7a52d8','#c93a63','#c2551d']; // 서울/부산/대전충청/구미경북/광주전라
+const REGION_COLOR=['#2f6fd0','#0c7d55','#7a52d8','#c93a63','#c2551d']; // 도심권/동북권/서북권/서남권/동남권 (서울 5개 생활권)
 /* 커뮤니티 프로필 아바타 (로그인 없이 캐릭터 하나로 나를 표현)
    · 9종 여행 캐릭터 (원본 이미지에서 잘라 data URI로 임베드)
    · 글에는 캐릭터 '인덱스(0~8)'만 저장해 localStorage 용량을 아낍니다 */
@@ -28,8 +28,38 @@ const ZONES={
   se:{label:'동남권',color:'#c2551d',gu:['서초구','강남구','송파구','강동구']},
 };
 const GU2ZONE={}; Object.entries(ZONES).forEach(([k,z])=>z.gu.forEach(g=>GU2ZONE[g]=k));
-DATA.forEach((d,i)=>d.x=i);
-const FESTS=DATA.filter(d=>d.s); FESTS.forEach(d=>d.zone=GU2ZONE[d.g]||'central');
+const ZONE_KEYS=Object.keys(ZONES);              // ['central','ne','nw','sw','se'] — 권역 인덱스 순서
+const ZONE_IDX={}; ZONE_KEYS.forEach((k,i)=>ZONE_IDX[k]=i);
+
+/* 서울만 추려서 5개 생활권(권역)으로 재분류한다.
+   · d.r    : 기존 광역권 인덱스(서울=0) → 생활권 인덱스(0~4)로 덮어씀
+   · d.zone : 생활권 키(central/ne/nw/sw/se)
+   · 구(區) 정보가 없는 소수 장소는 좌표로 가장 가까운 권역에 배정 */
+const DATA=BASE_DATA.filter(d=>d.r===0);
+(function reclassify(){
+  const sum=ZONE_KEYS.map(()=>({la:0,ln:0,n:0}));
+  DATA.forEach(d=>{ const z=GU2ZONE[d.g]; if(z){ const s=sum[ZONE_IDX[z]]; s.la+=d.la; s.ln+=d.ln; s.n++; } });
+  const cent=ZONE_KEYS.map((k,i)=>({k,la:sum[i].la/(sum[i].n||1),ln:sum[i].ln/(sum[i].n||1)}));
+  DATA.forEach(d=>{
+    let z=GU2ZONE[d.g];
+    if(!z){ let bk=cent[0].k,bd=Infinity; for(const c of cent){ const dd=(d.la-c.la)**2+(d.ln-c.ln)**2; if(dd<bd){bd=dd;bk=c.k;} } z=bk; }
+    d.zone=z; d.r=ZONE_IDX[z];
+  });
+  DATA.forEach((d,i)=>d.x=i);
+})();
+
+/* 서울 생활권 기준으로 통계 재구성 (BASE_STATS는 전국 기준이라 새로 만든다) */
+const STATS={
+  total:DATA.length,
+  cats:BASE_STATS.cats,
+  regions:ZONE_KEYS.map(k=>ZONES[k].label),      // 도심권/동북권/서북권/서남권/동남권
+  bycat:BASE_STATS.cats.map(()=>0),
+  byreg:ZONE_KEYS.map(()=>0),
+  ndates:BASE_STATS.ndates,
+};
+DATA.forEach(d=>{ STATS.bycat[d.c]++; STATS.byreg[d.r]++; });
+
+const FESTS=DATA.filter(d=>d.s);                 // zone/r 이미 재분류됨
 const REGCAT=STATS.regions.map(()=>new Array(STATS.cats.length).fill(0)); DATA.forEach(d=>REGCAT[d.r][d.c]++);
 const REGBOUNDS=STATS.regions.map(()=>null);
 (function(){ const acc={};
@@ -52,72 +82,76 @@ const SAMPLE_POSTS=[
   {nick:'', avatar:7, region:'', ago:88, body:'축제 갈 때 주차 때문에 매번 고생인데, 근처 공영주차장이나 셔틀 정보 아시는 분 계신가요?'},
   {nick:'단풍기다림', avatar:8, region:'', ago:110, body:'가을 단풍 명소 미리 찜해둡니다 🍁 매년 시기 놓쳐서 올해는 꼭 절정에 맞춰 가보려고요.'},
   {nick:'사진덕후', avatar:0, region:'', ago:132, body:'사진 찍기 좋은 명소 리스트 같이 만들어요. 인생샷 나온 장소랑 시간대까지 공유하면 최고겠죠?'},
-  /* 서울 게시판 */
-  {nick:'한강러버', avatar:1, region:0, ago:2, body:'여의도 봄꽃축제 다녀왔어요! 벚꽃 절정이라 사람은 많았지만 밤 야경이 진짜 예뻐요 🌸 돗자리 꼭 챙겨가세요.'},
-  {nick:'성수동주민', avatar:2, region:0, ago:26, body:'성수동 팝업 요즘 너무 많죠… 주말엔 웨이팅 기본 30분이에요. 평일 오전이 그나마 여유롭습니다.'},
-  {nick:'', avatar:3, region:0, ago:38, body:'경복궁 야간개장 다녀왔어요. 한복 입으면 입장 무료라 사람 정말 많더라고요. 예매는 필수!'},
-  {nick:'북촌산책', avatar:4, region:0, ago:52, body:'북촌한옥마을은 아침 일찍 가야 사람 없이 예쁜 사진 건져요. 주민 거주지라 조용히 다녀야 해요.'},
-  {nick:'', avatar:5, region:0, ago:66, body:'서울숲 피크닉 강추합니다. 돗자리랑 간식만 챙기면 하루 순삭이에요. 사슴 방사장도 아이들이 좋아해요.'},
-  {nick:'분수쇼팬', avatar:6, region:0, ago:79, body:'반포 달빛무지개분수 여름밤에 보면 진짜 시원해요. 시간표 확인하고 30분 전엔 자리 잡는 게 좋아요.'},
-  {nick:'', avatar:7, region:0, ago:95, body:'익선동 골목 맛집 추천받아요! 분위기 좋고 사진 잘 나오는 곳으로요. 데이트 코스 짜는 중입니다.'},
-  {nick:'야경헌터', avatar:8, region:0, ago:120, body:'롯데타워 서울스카이 노을 시간대가 최고예요. 낮→노을→야경까지 한 번에 볼 수 있어서 강추합니다.'},
-  {nick:'', avatar:0, region:0, ago:150, body:'광장시장 먹거리 웨이팅 요즘 심하네요 ㅠㅠ 마약김밥이랑 육회는 평일 낮에 가는 걸 추천드려요.'},
-  {nick:'서촌러', avatar:1, region:0, ago:180, body:'서촌 산책 코스 조용하고 좋아요. 통인시장 도시락카페도 재밌고, 골목 카페들도 아기자기합니다.'},
-  /* 부산 게시판 */
-  {nick:'', avatar:2, region:1, ago:6, body:'이번 주말 부산 가는데 광안리 근처 회 말고 다른 맛집 추천받아요! 혼밥 가능한 곳이면 더 좋아요.'},
-  {nick:'불꽃축제대기', avatar:3, region:1, ago:30, body:'광안리 불꽃축제 명당 자리 정보 공유해요. 광안대교 잘 보이는 곳은 오후 일찍부터 자리 맡아야 해요 🎆'},
-  {nick:'', avatar:4, region:1, ago:44, body:'감천문화마을 계단 진짜 많으니까 편한 신발 필수예요. 어린왕자 포토존은 웨이팅 좀 있습니다.'},
-  {nick:'해운대주민', avatar:5, region:1, ago:57, body:'해운대 새벽 산책 강추해요. 해 뜨는 시간에 바다 보면서 걷는 거 진짜 힐링됩니다 🌅'},
-  {nick:'', avatar:6, region:1, ago:72, body:'흰여울문화마을 뷰 미쳤어요. 절벽 위 골목에서 보는 바다가 그림 같아요. 영화 촬영지로도 유명하죠.'},
-  {nick:'서핑입문', avatar:7, region:1, ago:90, body:'송정에서 서핑 초보 강습 받고 왔어요! 장비 다 대여되고 강사님도 친절. 여름 액티비티로 딱이에요 🏄'},
-  {nick:'', avatar:8, region:1, ago:108, body:'부산 밀면 맛집 추천 부탁해요. 관광지 말고 현지인이 진짜 가는 곳으로 알고 싶습니다!'},
-  {nick:'태종대러버', avatar:0, region:1, ago:126, body:'태종대는 다누비열차 타는 게 편해요. 걸으면 은근 힘든데 경치는 어느 쪽이든 최고입니다.'},
-  {nick:'', avatar:1, region:1, ago:150, body:'부산 오션뷰 카페투어 리스트 만드는 중이에요. 청사포·기장 쪽에 예쁜 카페 많더라고요 ☕'},
-  {nick:'남포동토박이', avatar:2, region:1, ago:175, body:'남포동 야경 산책 코스 좋네요. 용두산공원 부산타워 올라가면 항구 야경이 한눈에 들어와요.'},
-  /* 대전·충청 게시판 */
-  {nick:'', avatar:3, region:2, ago:50, body:'대전 성심당 튀김소보로 사려고 30분 줄 섰네요 ㅋㅋ 그래도 이 맛은 못 참지 🥐 근처 주차는 어려워요.'},
-  {nick:'라이딩러', avatar:4, region:2, ago:36, body:'대청호 벚꽃길 자전거 라이딩 최고예요. 벚꽃 필 때 가면 터널 지나는 기분! 자전거 대여도 됩니다 🚲'},
-  {nick:'', avatar:5, region:2, ago:62, body:'공주 공산성 산책 가을에 딱이에요. 성벽 따라 걷다 보면 금강 뷰가 시원하게 트여요. 야경도 예쁩니다.'},
-  {nick:'연꽃보러', avatar:6, region:2, ago:78, body:'부여 궁남지 연꽃 필 때 꼭 가보세요. 7~8월 새벽이 절정이에요. 서동요 배경으로도 유명한 곳이죠.'},
-  {nick:'', avatar:7, region:2, ago:96, body:'단양 도담삼봉 유람선 타고 왔어요. 강 위에서 보는 삼봉이 색다르고, 근처 잔도길 걷기도 좋아요.'},
-  {nick:'벽화마을탐방', avatar:8, region:2, ago:114, body:'청주 수암골 벽화마을 조용하고 정겨워요. 드라마 촬영지라 포토존 많고, 전망대 카페 뷰도 좋습니다.'},
-  {nick:'', avatar:0, region:2, ago:132, body:'대전 엑스포다리 야경 예뻐요. 한빛탑이랑 같이 보면 좋고, 밤에 산책하는 사람들 많더라고요.'},
-  {nick:'머드축제고고', avatar:1, region:2, ago:156, body:'보령 머드축제 갈 건데 준비물 팁 있나요? 갈아입을 옷이랑 방수팩은 챙겼는데 또 뭐가 필요할까요?'},
-  {nick:'', avatar:2, region:2, ago:180, body:'태안 안면도 꽃지해변 노을 명소로 강추해요. 할미·할아비 바위 사이로 지는 해가 정말 장관입니다 🌇'},
-  {nick:'등산초보', avatar:3, region:2, ago:204, body:'계룡산 등산 초보 코스 추천해주세요. 너무 힘들지 않으면서 경치 괜찮은 루트로 가보고 싶어요.'},
-  /* 구미·경북 게시판 */
-  {nick:'금오산단풍', avatar:4, region:3, ago:12, body:'금오산 케이블카 타고 단풍 보러 갔는데 시즌엔 진짜 최고예요 🍁 정상 부근 산책로도 잘 돼 있어요.'},
-  {nick:'', avatar:5, region:3, ago:40, body:'경주 불국사는 아침 일찍 가는 걸 강추해요. 사람 없을 때 고요한 분위기가 정말 좋습니다.'},
-  {nick:'한옥스테이', avatar:6, region:3, ago:60, body:'안동 하회마을에서 한옥 숙박하고 왔어요. 밤에 별 보고 아침에 안개 낀 마을 보는 게 특별했어요.'},
-  {nick:'', avatar:7, region:3, ago:82, body:'포항 호미곶 일출 보러 가려는데 명당 정보 있나요? 상생의 손 뒤로 해 뜨는 사진 찍고 싶어요 🌅'},
-  {nick:'첨성대야경', avatar:8, region:3, ago:100, body:'경주 첨성대 야경 산책 좋아요. 주변 꽃밭이랑 같이 조명 켜지면 분위기 최고. 동궁과 월지도 놓치지 마세요.'},
-  {nick:'', avatar:0, region:3, ago:120, body:'영주 부석사 무량수전에서 보는 소백산 능선 뷰가 감동이에요. 은행나무 노랗게 물들 때 가면 더 예뻐요.'},
-  {nick:'걷기좋아', avatar:1, region:3, ago:144, body:'문경새재 걷기 딱 좋은 계절이네요. 옛길 따라 3관문까지 왕복하면 운동도 되고 사극 세트장도 재밌어요.'},
-  {nick:'', avatar:2, region:3, ago:168, body:'울릉도 들어가는 배편 멀미 팁 좀 나눠주세요. 멀미약은 언제 먹는 게 좋고, 자리는 어디가 나은가요?'},
-  {nick:'낙동강산책', avatar:3, region:3, ago:192, body:'구미 낙동강 체육공원 산책 코스 넓고 좋아요. 자전거도로도 잘 돼 있어서 러닝하는 분들 많더라고요.'},
-  {nick:'', avatar:4, region:3, ago:216, body:'청송 주왕산 단풍 시기 언제가 절정인가요? 주산지 물안개랑 같이 보고 싶어서 일정 잡는 중이에요.'},
-  /* 광주·전라 게시판 */
-  {nick:'전라도한바퀴', avatar:5, region:4, ago:74, body:'순천만 국가정원 가을에 가면 갈대밭이 장관이에요. 꼭 노을 시간 맞춰 가보세요 🌾'},
-  {nick:'', avatar:6, region:4, ago:16, body:'전주 한옥마을 비빔밥 맛집 추천받아요! 관광지 물가 말고 현지인 추천 있으면 더 좋습니다.'},
-  {nick:'밤바다러버', avatar:7, region:4, ago:34, body:'여수 밤바다 케이블카 야경 최고예요 🌃 노래로만 듣다가 실제로 보니 진짜 반짝반짝하더라고요.'},
-  {nick:'', avatar:8, region:4, ago:54, body:'담양 죽녹원 대나무숲 걷고 왔는데 완전 힐링됐어요. 바람에 대나무 스치는 소리가 정말 좋아요 🎋'},
-  {nick:'근대산책', avatar:0, region:4, ago:72, body:'광주 양림동 근대역사거리 산책 좋아요. 오래된 선교사 사택이랑 카페들이 어우러져 분위기 있어요.'},
-  {nick:'', avatar:1, region:4, ago:92, body:'보성 녹차밭 초록 물결이 진짜 장관이에요. 계단식 밭 사이로 걷다 보면 사진이 그냥 다 잘 나와요 🍵'},
-  {nick:'광한루봄나들이', avatar:2, region:4, ago:112, body:'남원 광한루 봄에 가보세요. 연못이랑 정자 어우러진 풍경이 고즈넉해요. 춘향전 배경지로도 유명하죠.'},
-  {nick:'', avatar:3, region:4, ago:134, body:'목포 유달산 케이블카 뷰 미쳤어요. 다도해랑 목포 시내가 한눈에 들어오고, 노을 질 때가 특히 예뻐요.'},
-  {nick:'아이랑기차', avatar:4, region:4, ago:158, body:'곡성 기차마을 아이랑 가기 딱 좋아요. 증기기관차 타고 섬진강 따라 달리는데 아이가 너무 좋아했어요 🚂'},
-  {nick:'', avatar:5, region:4, ago:184, body:'군산 근대문화거리 레트로 감성 가득해요. 초원사진관이랑 빵집 이성당은 필수 코스! 골목 구경만 해도 재밌어요.'},
+  /* 도심권 게시판 (종로·중구·용산) */
+  {nick:'', avatar:3, region:0, ago:8, body:'경복궁 야간개장 다녀왔어요. 한복 입으면 입장 무료라 사람 정말 많더라고요. 예매는 필수!'},
+  {nick:'북촌산책', avatar:4, region:0, ago:26, body:'북촌한옥마을은 아침 일찍 가야 사람 없이 예쁜 사진 건져요. 주민 거주지라 조용히 다녀야 해요.'},
+  {nick:'', avatar:0, region:0, ago:40, body:'광장시장 먹거리 웨이팅 요즘 심하네요 ㅠㅠ 마약김밥이랑 육회는 평일 낮에 가는 걸 추천드려요.'},
+  {nick:'서촌러', avatar:1, region:0, ago:55, body:'서촌 산책 코스 조용하고 좋아요. 통인시장 도시락카페도 재밌고, 골목 카페들도 아기자기합니다.'},
+  {nick:'', avatar:7, region:0, ago:72, body:'익선동 골목 맛집 추천받아요! 분위기 좋고 사진 잘 나오는 곳으로요. 데이트 코스 짜는 중입니다.'},
+  {nick:'야경덕후', avatar:2, region:0, ago:90, body:'남산 서울타워 케이블카 타고 올라가서 본 야경 최고예요. 걸어 올라가면 은근 힘드니 참고하세요 🌃'},
+  {nick:'', avatar:5, region:0, ago:110, body:'을지로 노가리골목(힙지로) 저녁에 가면 분위기 살아나요. 오래된 골목에 요즘 감성 카페가 섞여 재밌어요.'},
+  {nick:'박물관러', avatar:6, region:0, ago:132, body:'용산 국립중앙박물관 무료라 자주 가요. 반영 연못이랑 전시 다 좋고, 비 오는 날 나들이로 딱입니다.'},
+  {nick:'', avatar:8, region:0, ago:156, body:'명동 칼국수 골목 아직 그대로네요. 쇼핑하다 출출할 때 딱이고, 명동성당 쪽 산책도 조용해서 좋아요.'},
+  {nick:'덕수궁돌담', avatar:1, region:0, ago:182, body:'덕수궁 돌담길 단풍 들면 산책 강추해요. 정동길 따라 걷다 보면 근대건축물이랑 카페가 어우러져 예뻐요.'},
+  /* 동북권 게시판 (성동·광진·동대문·중랑·성북·강북·도봉·노원) */
+  {nick:'성수동주민', avatar:2, region:1, ago:5, body:'성수동 팝업 요즘 너무 많죠… 주말엔 웨이팅 기본 30분이에요. 평일 오전이 그나마 여유롭습니다.'},
+  {nick:'', avatar:5, region:1, ago:24, body:'서울숲 피크닉 강추합니다. 돗자리랑 간식만 챙기면 하루 순삭이에요. 사슴 방사장도 아이들이 좋아해요.'},
+  {nick:'건대러', avatar:3, region:1, ago:42, body:'건대 커먼그라운드랑 먹자골목 코스 좋아요. 저녁엔 사람 많지만 골목마다 맛집이라 실패가 없어요.'},
+  {nick:'', avatar:6, region:1, ago:60, body:'어린이대공원 무료라 아이랑 자주 가요. 동물원도 있고 산책로 넓어서 유모차 끌기도 편합니다.'},
+  {nick:'전망대러버', avatar:7, region:1, ago:80, body:'북서울꿈의숲 전망대에서 보는 시내 뷰 의외로 멋져요. 단풍철엔 사진 맛집이라 사람 좀 있어요.'},
+  {nick:'', avatar:0, region:1, ago:100, body:'성북동 길상사 조용해서 마음이 차분해져요. 근처 수연산방에서 차 한잔하는 코스도 참 좋습니다.'},
+  {nick:'뚝섬치맥', avatar:4, region:1, ago:122, body:'뚝섬한강공원 저녁에 치맥하러 자주 가요. 자전거 빌려서 한 바퀴 돌고 노을 보는 게 국룰이에요 🚲'},
+  {nick:'', avatar:8, region:1, ago:145, body:'노원 화랑대 철도공원(구 화랑대역) 산책 좋아요. 옛 기차랑 트램 전시돼 있어서 사진 찍기 재밌어요 🚃'},
+  {nick:'아차산일출', avatar:1, region:1, ago:168, body:'광진 아차산 일출 등산 강추해요. 초보도 30~40분이면 정상이라 부담 없고, 한강 뷰가 시원합니다 🌅'},
+  {nick:'', avatar:2, region:1, ago:192, body:'중랑 장미공원 5월에 가보세요. 벽면 가득 장미가 피면 진짜 장관이에요. 축제 기간엔 야간 조명도 예뻐요 🌹'},
+  /* 서북권 게시판 (은평·서대문·마포) */
+  {nick:'홍대버스킹', avatar:3, region:2, ago:7, body:'홍대 걷고싶은거리 주말 버스킹 구경만 해도 재밌어요. 밤엔 사람 많으니 소지품 조심하세요!'},
+  {nick:'', avatar:4, region:2, ago:22, body:'연남동 경의선숲길(연트럴파크) 산책 좋아요. 잔디밭에 돗자리 펴고 쉬는 사람 많고, 카페도 아기자기해요.'},
+  {nick:'억새보러', avatar:5, region:2, ago:38, body:'하늘공원 억새 절정일 때 꼭 가보세요 🍂 계단 좀 힘든데 올라가면 한강이랑 억새밭 뷰가 끝내줘요.'},
+  {nick:'', avatar:6, region:2, ago:56, body:'망원한강공원 노을 맛집이에요. 근처 망리단길에서 먹을 거 포장해서 강변에서 피크닉하면 완벽합니다.'},
+  {nick:'캠핑입문', avatar:7, region:2, ago:76, body:'상암 노을공원 캠핑장 예약해서 다녀왔어요. 도심에서 이런 캠핑이 되다니! 맹꽁이전기차 타고 올라가면 편해요.'},
+  {nick:'', avatar:8, region:2, ago:96, body:'안산 자락길 무장애 데크길이라 유모차·휠체어도 편해요. 메타세쿼이아 구간이 특히 예쁘고 그늘져서 여름에도 좋아요.'},
+  {nick:'한옥카페', avatar:0, region:2, ago:118, body:'은평한옥마을 카페 뷰가 예술이에요. 북한산 배경으로 한옥 지붕들이 쫙 깔려서 사진 어떻게 찍어도 잘 나와요.'},
+  {nick:'', avatar:1, region:2, ago:140, body:'서대문 안산 봉수대까지 가볍게 등산 다녀왔어요. 연희동 내려와서 브런치 먹는 코스로 딱 좋습니다.'},
+  {nick:'망리단맛집', avatar:2, region:2, ago:162, body:'망원시장이랑 망리단길 맛집투어 강추해요. 시장에서 주전부리 사서 골목 구경하는 재미가 쏠쏠합니다.'},
+  {nick:'', avatar:3, region:2, ago:186, body:'월드컵공원 메타세쿼이아길 라이딩 좋아요. 평화의공원 쪽은 잔디밭 넓어서 아이들 뛰어놀기도 좋더라고요.'},
+  /* 서남권 게시판 (양천·강서·구로·금천·영등포·동작·관악) */
+  {nick:'한강러버', avatar:1, region:3, ago:3, body:'여의도 봄꽃축제 다녀왔어요! 벚꽃 절정이라 사람은 많았지만 밤 야경이 진짜 예뻐요 🌸 돗자리 꼭 챙겨가세요.'},
+  {nick:'', avatar:4, region:3, ago:20, body:'63빌딩 아쿠아리움 아이랑 다녀왔어요. 전망대에서 보는 한강 뷰도 좋고, 비 오는 날 실내 나들이로 딱이에요.'},
+  {nick:'회러버', avatar:5, region:3, ago:36, body:'노량진 수산시장에서 회 떠서 2층에서 먹었어요. 흥정은 필수! 초장집 이용료 미리 물어보는 게 좋아요.'},
+  {nick:'', avatar:6, region:3, ago:54, body:'보라매공원 산책로 넓고 좋아요. 반려견이랑 오는 사람도 많고, 음악분수 나오는 시간엔 사람이 확 몰려요.'},
+  {nick:'식물원덕후', avatar:7, region:3, ago:74, body:'마곡 서울식물원 온실 강추해요 🌿 열대관·지중해관 구경하고 호수 한 바퀴 돌면 반나절이 훌쩍 갑니다.'},
+  {nick:'', avatar:8, region:3, ago:94, body:'관악산 등산 초보 코스 추천해주세요. 서울대 쪽에서 오르는 길이 완만하다던데 경치 괜찮은지 궁금해요.'},
+  {nick:'치맥고정', avatar:0, region:3, ago:116, body:'여의도한강공원 물빛광장에서 치맥하는 게 여름 국룰이죠 🍗 배달존 있어서 자리에서 시켜 먹기 편해요.'},
+  {nick:'', avatar:2, region:3, ago:138, body:'구로 신도림 디큐브시티 실내라 더울 때 좋아요. 아이랑 서점 구경하고 밥 먹기 딱이라 자주 갑니다.'},
+  {nick:'윤중로벚꽃', avatar:3, region:3, ago:160, body:'국회의사당 뒤 윤중로 벚꽃길 봄에 진짜 예뻐요. 여의도 봄꽃축제랑 이어져서 사람 엄청 많으니 아침 추천!'},
+  {nick:'', avatar:5, region:3, ago:184, body:'양천 목동 파리공원 조용하고 산책하기 좋아요. 아침 운동하는 주민 많고, 근처 오목교 상권도 먹을 게 많아요.'},
+  /* 동남권 게시판 (서초·강남·송파·강동) */
+  {nick:'야경헌터', avatar:8, region:4, ago:6, body:'롯데타워 서울스카이 노을 시간대가 최고예요. 낮→노을→야경까지 한 번에 볼 수 있어서 강추합니다.'},
+  {nick:'', avatar:1, region:4, ago:23, body:'석촌호수 벚꽃 필 때 진짜 예뻐요 🌸 봄엔 러버덕 같은 전시도 종종 하니까 산책 겸 한 바퀴 돌기 좋아요.'},
+  {nick:'도서관덕후', avatar:2, region:4, ago:40, body:'코엑스 별마당도서관 사진 맛집이죠. 높은 서가 배경으로 찍으면 예쁜데, 주말엔 사람 많으니 평일 추천해요.'},
+  {nick:'', avatar:3, region:4, ago:58, body:'봉은사 도심 속 사찰인데 참 고요해요. 강남 한복판에서 단청이랑 등 구경하면 마음이 차분해집니다.'},
+  {nick:'들꽃마루', avatar:4, region:4, ago:78, body:'올림픽공원 들꽃마루랑 나홀로나무 사진 찍으러 갔어요. 넓어서 자전거 빌리는 게 편하고 산책 코스도 다양해요.'},
+  {nick:'', avatar:6, region:4, ago:98, body:'반포 달빛무지개분수 여름밤에 보면 진짜 시원해요. 시간표 확인하고 30분 전엔 자리 잡는 게 좋아요.'},
+  {nick:'가로수길산책', avatar:7, region:4, ago:120, body:'신사동 가로수길 카페투어 다녀왔어요. 메인 거리보다 세로수길 골목이 조용하고 예쁜 곳 많더라고요 ☕'},
+  {nick:'', avatar:0, region:4, ago:142, body:'방이동 먹자골목 회식 장소로 딱이에요. 오래된 노포부터 요즘 술집까지 다양해서 골라 먹는 재미가 있어요.'},
+  {nick:'유적산책', avatar:5, region:4, ago:166, body:'강동 암사동 유적 아이랑 다녀왔어요. 움집 복원이랑 체험 프로그램 있어서 교육 겸 나들이로 좋았습니다.'},
+  {nick:'', avatar:2, region:4, ago:190, body:'서초 양재천 벚꽃길 봄에 산책 강추해요. 여의도만큼 붐비지 않아서 여유롭게 꽃구경하기 좋아요 🌸'},
 ];
 
-/* 홈 배너(캐러셀): 0=기본 슬라이드, 이후 권역별 대표 이미지 */
 const FEST_BY_REG=STATS.regions.map(()=>0); FESTS.forEach(f=>FEST_BY_REG[f.r]++);
+/* 홈 배너(캐러셀): 0=기본 슬라이드, 이후 권역별 대표 명소(데이터에서 실제 이미지를 골라 사용) */
+function pickHero(ri, names){
+  for(const nm of names){ const f=DATA.find(d=>d.r===ri && d.im && d.t.includes(nm)); if(f) return {region:ri,img:f.im,place:f.t}; }
+  const any=DATA.find(d=>d.r===ri && d.im); return {region:ri,img:any?any.im:'',place:any?any.t:STATS.regions[ri]};
+}
 const HERO=[
   {region:'', img:'', place:''},
-  {region:0, img:'https://tong.visitkorea.or.kr/cms/resource/98/3487598_image2_1.jpg', place:'경복궁'},
-  {region:1, img:'https://tong.visitkorea.or.kr/cms/resource/34/3090534_image2_1.JPG', place:'해운대'},
-  {region:2, img:'https://tong.visitkorea.or.kr/cms/resource/00/3489900_image2_1.jpg', place:'대청호 벚꽃길'},
-  {region:3, img:'https://tong.visitkorea.or.kr/cms/resource/01/3566301_image2_1.jpg', place:'금오산'},
-  {region:4, img:'https://tong.visitkorea.or.kr/cms/resource/42/3027242_image2_1.jpg', place:'순천만'},
+  pickHero(0,['경복궁','창덕궁','덕수궁','남산','명동']),           // 도심권
+  pickHero(1,['서울숲','북서울꿈의숲','어린이대공원','성수','건대']), // 동북권
+  pickHero(2,['하늘공원','평화의공원','월드컵','홍대','상암']),       // 서북권
+  pickHero(3,['여의도한강공원','한강공원','63','노량진','서울식물원']), // 서남권
+  pickHero(4,['롯데','석촌호수','봉은사','올림픽공원','코엑스']),      // 동남권
 ];
 
 

@@ -2,7 +2,7 @@
     <button class="chat-fab" v-if="!open" @click="toggle" aria-label="챗봇 열기"><span class="fab-bubble">💬</span><span class="fab-bot">🤖</span></button>
     <div class="chat-panel" v-if="open">
       <div class="chat-head">
-        <div><div class="t">마실 도우미</div><div class="d">전국 장소 데이터로 답해요 · OpenAI</div></div>
+        <div><div class="t">마실 도우미</div><div class="d">서울 장소 데이터로 답해요 · OpenAI</div></div>
         <button class="ic" @click="showKey=!showKey" title="API 키 설정">🔑</button>
         <button class="ic" @click="clearChat" title="대화 비우기">🗑️</button>
         <button class="ic" @click="toggle" title="닫기">✕</button>
@@ -27,7 +27,7 @@
 </template>
 
 <script>
-import { DATA, STATS } from '../data/masil-data.js'
+import { DATA, STATS } from '../lib.js'
 
 export default {
   name: 'ChatWidget',
@@ -36,7 +36,7 @@ export default {
     apiKey:localStorage.getItem('masil_openai_key')||'',
     keyInput:'', showKey:false,
     messages:JSON.parse(localStorage.getItem('masil_chat')||'[]'),
-    suggestions:['종로구 가볼 만한 곳','이번 가을 서울 축제','부산 관광지 추천','아이랑 갈 문화시설'],
+    suggestions:['종로구 가볼 만한 곳','이번 가을 서울 축제','강남 데이트 코스','아이랑 갈 문화시설'],
   }},
   methods:{
     toggle(){ this.open=!this.open; if(this.open&&!this.apiKey) this.showKey=true; this.$nextTick(this.scrollDown); },
