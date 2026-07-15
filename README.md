@@ -34,11 +34,3 @@ masil-vite/
       └─ masil-data.js        # 장소 데이터 (TourAPI · export DATA, STATS)
 ```
 
-## 원본과 달라진 점
-
-- Vue를 **CDN(`vue.global.prod.js`) → npm 의존성**으로 전환
-- **Leaflet**을 npm 패키지로 import (`import L from 'leaflet'`, CSS도 import)
-- 인라인 `template:` 문자열 → **`.vue` 싱글파일 컴포넌트의 `<template>`** (Vite는 런타임 전용 빌드라 문자열 template 미지원)
-- 데이터 파일은 전역 변수 대신 **ESM export** 로 변경
-
-동작(뷰 전환·지도·캘린더·커뮤니티 CRUD·챗봇·localStorage)은 그대로입니다.
